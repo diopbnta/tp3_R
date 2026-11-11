@@ -1,0 +1,544 @@
+---
+title: "TP 3 : Data frames et dplyr"
+subtitle: "Introduction au langage R · Cnam · USSI6B-1"
+author: "Alioune DIOP"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: false
+---
+
+```{r setup, include = FALSE}
+library(tidyverse)
+source("donnees_tp3.R")
+knitr::opts_chunk$set(comment = "#>")
+```
+
+# Partie A
+
+Dans cette partie, on travaille uniquement en **R de base** (sans `dplyr`).
+
+## A1
+
+```{r A1}
+promo <- data.frame(
+  prenom    = prenom,
+  age       = age,
+  filiere   = factor(filiere, levels = c("info", "stat", "eco")),
+  note_r    = note_r,
+  note_stat = note_stat
+)
+
+str(promo)
+dim(promo)
+levels(promo$filiere)
+```
+
+Le data frame `promo` compte `r nrow(promo)` lignes (une par étudiant) et `r ncol(promo)` colonnes. La colonne `filiere` est bien un facteur dont les niveaux sont, dans l'ordre, `info`, `stat` et `eco`.
+
+## A2
+
+**Prédictions écrites avant l'exécution :**
+
+| Instruction | Classe prédite | Dimensions / longueur prédites |
+|---|---|---|
+| `promo[, 2]` | `numeric` (vecteur) | longueur 10 |
+| `promo[2]` | `data.frame` | 10 lignes × 1 colonne |
+| `promo[[2]]` | `numeric` (vecteur) | longueur 10 |
+| `promo[2, ]` | `data.frame` | 1 ligne × 5 colonnes |
+| `promo[, c("age", "note_r")]` | `data.frame` | 10 lignes × 2 colonnes |
+| `promo$ag` | `numeric` (vecteur) | longueur 10 (complétion partielle vers `age`) |
+
+**Exécution :**
+
+```{r A2}
+x1 <- promo[, 2];                 class(x1); length(x1)
+x2 <- promo[2];                   class(x2); dim(x2)
+x3 <- promo[[2]];                 class(x3); length(x3)
+x4 <- promo[2, ];                 class(x4); dim(x4)
+x5 <- promo[, c("age", "note_r")]; class(x5); dim(x5)
+x6 <- promo$ag;                   class(x6); length(x6)
+```
+
+**Explications :**
+
+- `promo[, 2]` : avec une seule colonne sélectionnée en notation `[lignes, colonnes]`, R **simplifie** le résultat en vecteur (`drop = TRUE` par défaut).
+- `promo[2]` : avec un seul indice, un data frame se comporte comme une **liste**. `[ ]` renvoie donc une sous-liste, c'est-à-dire un data frame d'une colonne.
+- `promo[[2]]` : `[[ ]]` **extrait l'élément** de la liste, c'est-à-dire le vecteur `age` lui-même.
+- `promo[2, ]` : une ligne d'un data frame contient des colonnes de types différents. Elle ne peut pas être simplifiée en vecteur, donc on obtient un data frame d'une ligne.
+- `promo[, c("age", "note_r")]` : plusieurs colonnes, donc pas de simplification possible. On obtient un data frame 10 × 2.
+- `promo$ag` : l'opérateur `$` accepte la **correspondance partielle** des noms. `ag` est complété en `age` et R affiche un avertissement. C'est une source d'erreurs : il vaut mieux toujours écrire le nom complet.
+
+Toutes les prédictions sont confirmées.
+
+## A3
+
+```{r A3}
+promo$moyenne <- round((2 * promo$note_r + 1 * promo$note_stat) / 3, 2)
+promo
+
+sum(is.na(promo$moyenne))
+promo[is.na(promo$moyenne), c("prenom", "note_r", "note_stat")]
+```
+
+`r sum(is.na(promo$moyenne))` étudiants n'ont pas de moyenne : `r paste(promo$prenom[is.na(promo$moyenne)], collapse = " et ")`. Il leur manque une des deux notes (`NA`), et toute opération arithmétique qui fait intervenir un `NA` donne `NA`.
+
+## A4
+
+```{r A4}
+promo[which(promo$age >= 25 & promo$moyenne >= 12),
+      c("prenom", "age", "moyenne")]
+```
+
+`which()` ne garde que les indices où la condition vaut `TRUE`. Les conditions qui valent `NA` (âge ou moyenne manquants) sont donc écartées, et aucune ligne `NA` n'apparaît. Seuls `r paste(promo$prenom[which(promo$age >= 25 & promo$moyenne >= 12)], collapse = " et ")` remplissent les deux critères.
+
+## A5
+
+```{r A5}
+promo_tri <- promo[order(promo$moyenne, decreasing = TRUE), ]
+promo_tri
+
+# Podium
+head(promo_tri[, c("prenom", "moyenne")], 3)
+```
+
+Les étudiants sans moyenne apparaissent **à la fin** du tableau : par défaut, `order()` place les `NA` en dernier (`na.last = TRUE`). Le podium est composé de `r paste(head(promo_tri$prenom, 3), collapse = ", ")`.
+
+## A6
+
+```{r A6}
+table(promo$filiere)
+
+moy_filiere <- tapply(promo$moyenne, promo$filiere, mean, na.rm = TRUE)
+round(moy_filiere, 2)
+```
+
+Info compte `r sum(promo$filiere == "info")` étudiants, stat et eco en comptent `r sum(promo$filiere == "stat")` chacune. Les filières comptent donc de `r min(table(promo$filiere))` à `r max(table(promo$filiere))` étudiants. La filière **`r names(which.max(moy_filiere))`** a la meilleure moyenne (`r round(max(moy_filiere), 2)`).
+
+## A7
+
+Code du camarade (non exécuté) :
+
+```{r A7-faux, eval = FALSE}
+promo[promo$filiere = "info", ]       # 1. les étudiants en info
+promo[promo$Age > 30]                 # 2. les plus de 30 ans
+promo[promo$note_r > 15, "prenom"]    # 3. prénoms des plus de 15 en R
+mean(promo$note_r)                    # 4. moyenne de R de la promo
+sum(promo$filiere == "Info")          # 5. nombre d'étudiants en info
+```
+
+**Erreurs repérées :**
+
+1. `=` est une **affectation**, pas une comparaison. Il faut `==`. En l'état, R renvoie une erreur de syntaxe.
+2. Il y a deux erreurs. La colonne s'appelle `age` et non `Age` (R est sensible à la casse) : `promo$Age` vaut `NULL`. Il manque aussi la **virgule** : sans elle, on sélectionne des colonnes et non des lignes. Le résultat serait un data frame sans aucune colonne.
+3. `note_r` contient un `NA` (Hugo). La comparaison vaut alors `NA` et produit une ligne `NA` dans le résultat. Il faut filtrer avec `which()`.
+4. `note_r` contient un `NA`, donc `mean()` renvoie `NA`. Il faut ajouter `na.rm = TRUE`.
+5. Le niveau s'écrit `"info"` en minuscules et non `"Info"`. La comparaison est toujours fausse et le résultat vaut 0.
+
+**Versions corrigées :**
+
+```{r A7-corrige}
+promo[promo$filiere == "info", ]                 # 1
+promo[which(promo$age > 30), ]                   # 2
+promo[which(promo$note_r > 15), "prenom"]        # 3
+mean(promo$note_r, na.rm = TRUE)                 # 4
+sum(promo$filiere == "info")                     # 5
+```
+
+Les corrections donnent bien les résultats attendus : `r sum(promo$filiere == "info")` étudiants en info et une moyenne de R de `r round(mean(promo$note_r, na.rm = TRUE), 2)`.
+
+# Partie B
+
+Dans cette partie, on travaille uniquement en **R de base**.
+
+## B1
+
+```{r B1}
+dim(airquality)
+colSums(is.na(airquality))
+
+pct_complet <- mean(complete.cases(airquality)) * 100
+round(pct_complet, 1)
+```
+
+Le jeu contient `r nrow(airquality)` jours et `r ncol(airquality)` variables. Les valeurs manquantes concernent seulement `Ozone` (`r sum(is.na(airquality$Ozone))`) et `Solar.R` (`r sum(is.na(airquality$Solar.R))`). `r round(pct_complet, 1)` % des jours sont complets.
+
+## B2
+
+```{r B2}
+aq <- airquality
+aq$TempC <- round((aq$Temp - 32) * 5 / 9, 1)
+aq$Mois  <- factor(aq$Month, levels = 5:9,
+                   labels = c("mai", "juin", "juillet", "août", "septembre"))
+head(aq)
+str(aq)
+```
+
+Pour convertir en degrés Celsius, on applique la formule °C = (°F − 32) × 5/9.
+
+## B3
+
+```{r B3}
+chaud <- aq$TempC >= 30
+sum(chaud)
+table(aq$Mois[chaud])
+
+temp_mois <- tapply(aq$TempC, aq$Mois, mean)
+round(temp_mois, 1)
+```
+
+`r sum(chaud)` jours ont atteint 30 °C ou plus. Ils se concentrent en juillet et en août, et il n'y en a aucun en mai. Le mois le plus chaud en moyenne est **`r names(which.max(temp_mois))`** (`r round(max(temp_mois), 1)` °C), juste devant juillet.
+
+## B4
+
+```{r B4}
+pics <- aq[which(aq$Ozone > 100), c("Mois", "Day", "Ozone", "TempC")]
+pics[order(pics$Ozone, decreasing = TRUE), ]
+```
+
+`r nrow(pics)` jours dépassent 100 ppb d'ozone. Tous ont lieu en juillet et en août, sauf un le 30 mai. Ce sont des journées chaudes, de 26 à 34 °C.
+
+## B5
+
+```{r B5}
+ozone_mois <- data.frame(
+  mois       = levels(aq$Mois),
+  n_mesures  = as.vector(tapply(!is.na(aq$Ozone), aq$Mois, sum)),
+  moyenne    = as.vector(round(tapply(aq$Ozone, aq$Mois, mean,   na.rm = TRUE), 1)),
+  mediane    = as.vector(tapply(aq$Ozone, aq$Mois, median, na.rm = TRUE)),
+  maximum    = as.vector(tapply(aq$Ozone, aq$Mois, max,    na.rm = TRUE))
+)
+ozone_mois
+```
+
+Juin n'a que `r ozone_mois$n_mesures[2]` mesures d'ozone sur 30 jours. Juillet et août ont les niveaux les plus élevés.
+
+## B6
+
+```{r B6}
+aq_tri <- aq[order(aq$Month, -aq$TempC, aq$Day), ]
+plus_chaud <- aq_tri[!duplicated(aq_tri$Month), c("Mois", "Day", "TempC")]
+plus_chaud
+```
+
+On trie le tableau par mois, puis par température décroissante, puis par jour croissant. `duplicated()` repère ensuite les lignes dont le mois a déjà été vu. En gardant les lignes non dupliquées, on obtient la première ligne de chaque mois, c'est-à-dire le jour le plus chaud, et le premier en cas d'égalité.
+
+## B7
+
+```{r B7}
+oz_chaud  <- mean(aq$Ozone[aq$TempC >= 30], na.rm = TRUE)
+oz_autres <- mean(aq$Ozone[aq$TempC <  30], na.rm = TRUE)
+c(chaud = oz_chaud, autres = oz_autres)
+oz_chaud / oz_autres
+```
+
+L'ozone moyen vaut `r round(oz_chaud, 1)` ppb les jours à 30 °C ou plus, contre `r round(oz_autres, 1)` ppb les autres jours. C'est environ **`r round(oz_chaud / oz_autres, 1)` fois plus**. Cela montre une **association** forte, mais **pas une causalité**. Il s'agit de données d'observation, et d'autres facteurs liés à la chaleur peuvent jouer : ensoleillement intense (qui produit l'ozone par réaction photochimique), vent faible, saison. Une simple comparaison de moyennes ne permet pas de séparer ces effets.
+
+## B8
+
+```{r B8}
+# Table de correspondance : vecteur nommé mois -> médiane
+med_mois <- tapply(aq$Ozone, aq$Month, median, na.rm = TRUE)
+med_mois
+
+aq$Ozone_imp <- ifelse(is.na(aq$Ozone),
+                       med_mois[as.character(aq$Month)],
+                       aq$Ozone)
+sum(is.na(aq$Ozone_imp))
+
+comparaison <- data.frame(
+  moyenne    = c(mean(aq$Ozone, na.rm = TRUE), mean(aq$Ozone_imp)),
+  ecart_type = c(sd(aq$Ozone,   na.rm = TRUE), sd(aq$Ozone_imp)),
+  row.names  = c("avant", "après")
+)
+round(comparaison, 2)
+```
+
+Après imputation, la moyenne baisse un peu (de `r round(comparaison$moyenne[1], 1)` à `r round(comparaison$moyenne[2], 1)`), car la médiane est inférieure à la moyenne pour une distribution asymétrique. L'écart-type **diminue** aussi (de `r round(comparaison$ecart_type[1], 1)` à `r round(comparaison$ecart_type[2], 1)`). Les `r sum(is.na(aq$Ozone))` valeurs ajoutées sont toutes au « centre » de leur mois : l'imputation **sous-estime artificiellement la variabilité**. Il faut en tenir compte dans les analyses. Juin, avec beaucoup de valeurs imputées, est particulièrement concerné.
+
+# Partie C
+
+Dans cette partie, on utilise **`dplyr`**.
+
+## C1
+
+```{r C1}
+glimpse(msleep)
+
+msleep %>%
+  summarise(across(everything(), ~ mean(is.na(.x)) * 100)) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "pct_na") %>%
+  filter(pct_na > 30) %>%
+  arrange(desc(pct_na))
+```
+
+Trois variables ont plus de 30 % de valeurs manquantes : `sleep_cycle` (environ 61 %), `conservation` (environ 35 %) et `brainwt` (environ 33 %).
+
+## C2
+
+```{r C2}
+ms <- msleep %>%
+  select(nom = name, regime = vore, ordre = order, sommeil = sleep_total,
+         sommeil_rem = sleep_rem, cerveau = brainwt, poids = bodywt) %>%
+  mutate(regime = recode(regime,
+                         carni   = "carnivore",
+                         herbi   = "herbivore",
+                         omni    = "omnivore",
+                         insecti = "insectivore"))
+ms
+count(ms, regime)
+```
+
+## C3
+
+```{r C3}
+grands <- ms %>%
+  filter(sommeil > 15) %>%
+  select(nom, regime, sommeil) %>%
+  arrange(desc(sommeil))
+grands
+
+petits <- ms %>%
+  filter(sommeil < 4) %>%
+  select(nom, regime, sommeil) %>%
+  arrange(sommeil)
+petits
+```
+
+`r nrow(grands)` espèces dorment plus de 15 h, et `r nrow(petits)` moins de 4 h. Les petits dormeurs sont presque tous de **grands herbivores** (girafe, cheval, éléphants, mouton…). Ils doivent passer beaucoup de temps à se nourrir et restent vigilants face aux prédateurs. Les grands dormeurs sont surtout de **petits animaux** : chauves-souris, tatous, opossums, écureuils. On y trouve beaucoup d'insectivores et aucun gros herbivore.
+
+## C4
+
+```{r C4}
+ms <- ms %>%
+  mutate(
+    part_rem     = sommeil_rem / sommeil * 100,
+    cerveau_pct  = cerveau / poids * 100,
+    classe_poids = cut(poids,
+                       breaks = c(0, 1, 10, 100, Inf),
+                       labels = c("< 1 kg", "1-10 kg", "10-100 kg", "100 kg et plus"),
+                       right  = FALSE,
+                       ordered_result = TRUE)
+  )
+
+ms %>% select(nom, part_rem, cerveau_pct, poids, classe_poids)
+class(ms$classe_poids)
+count(ms, classe_poids)
+```
+
+## C5
+
+```{r C5}
+c5 <- ms %>%
+  filter(!is.na(regime)) %>%
+  group_by(regime) %>%
+  summarise(n_especes     = n(),
+            sommeil_moyen = mean(sommeil),
+            ecart_type    = sd(sommeil),
+            minimum       = min(sommeil),
+            maximum       = max(sommeil)) %>%
+  arrange(desc(sommeil_moyen))
+c5
+```
+
+Les insectivores dorment le plus en moyenne (`r round(c5$sommeil_moyen[1], 1)` h), et les herbivores le moins. Ce sont aussi les herbivores qui ont la plus grande dispersion.
+
+## C6
+
+```{r C6}
+ms %>%
+  group_by(classe_poids) %>%
+  summarise(n_especes        = n(),
+            sommeil_moyen    = mean(sommeil),
+            part_rem_moyenne = mean(part_rem, na.rm = TRUE))
+```
+
+La tendance est nette : **plus l'animal est lourd, moins il dort**. Le sommeil moyen passe d'environ 13 h pour les moins de 1 kg à environ 6 h pour les 100 kg et plus. En revanche, la part de sommeil paradoxal ne montre **pas de tendance claire** : elle oscille entre 15 et 19 % selon les classes.
+
+## C7
+
+```{r C7}
+ms %>%
+  filter(!is.na(regime)) %>%
+  group_by(regime) %>%
+  slice_max(sommeil, n = 1, with_ties = FALSE) %>%
+  select(regime, nom, sommeil)
+```
+
+## C8
+
+```{r C8}
+ms %>%
+  group_by(ordre) %>%
+  filter(n() >= 5) %>%
+  summarise(n_especes           = n(),
+            sommeil_moyen       = mean(sommeil),
+            mediane_cerveau_pct = median(cerveau_pct, na.rm = TRUE)) %>%
+  arrange(desc(sommeil_moyen))
+```
+
+Parmi les ordres les mieux représentés, les rongeurs (*Rodentia*) dorment le plus. Les artiodactyles (ruminants, etc.) dorment le moins et ont un cerveau très petit par rapport à leur corps.
+
+## C9
+
+```{r C9}
+ms_base <- ms[!is.na(ms$regime), ]
+
+c9 <- data.frame(
+  n_especes     = as.vector(table(ms_base$regime)),
+  sommeil_moyen = as.vector(tapply(ms_base$sommeil, ms_base$regime, mean)),
+  row.names     = names(table(ms_base$regime))
+)
+c9 <- c9[order(c9$sommeil_moyen, decreasing = TRUE), ]
+c9
+
+# Vérification : mêmes valeurs que C5 ?
+all.equal(c9$n_especes, c5$n_especes)
+all.equal(c9$sommeil_moyen, c5$sommeil_moyen)
+```
+
+Les deux vérifications renvoient `TRUE` : la version en R de base donne exactement les mêmes valeurs que la version `dplyr`.
+
+# Partie D
+
+Dans cette partie, on utilise **`dplyr`**.
+
+## D1
+
+```{r D1}
+commandes %>%
+  summarise(n_lignes    = n(),
+            n_commandes = n_distinct(Order_ID),
+            n_clients   = n_distinct(Customer_ID),
+            n_produits  = n_distinct(Product_ID),
+            debut       = min(Order_Date),
+            fin         = max(Order_Date))
+```
+
+Le fichier compte `r nrow(commandes)` lignes, pour `r n_distinct(commandes$Order_ID)` commandes, `r n_distinct(commandes$Customer_ID)` clients et `r n_distinct(commandes$Product_ID)` produits distincts. Les commandes vont du `r min(commandes$Order_Date)` au `r max(commandes$Order_Date)`.
+
+## D2
+
+```{r D2}
+cmd <- commandes %>%
+  as_tibble() %>%
+  rename(client        = Customer_ID,
+         vendeur       = Employee_ID,
+         date_cmd      = Order_Date,
+         date_livr     = Delivery_Date,
+         commande      = Order_ID,
+         canal         = Order_Type,
+         produit       = Product_ID,
+         quantite      = Quantity,
+         prix_total    = Total_Retail_Price,
+         cout_unitaire = CostPrice_Per_Unit) %>%
+  mutate(canal     = factor(canal, levels = 1:3,
+                            labels = c("magasin", "catalogue", "internet")),
+         vendeur   = na_if(vendeur, 99999999),
+         date_cmd  = as.Date(date_cmd),
+         date_livr = as.Date(date_livr))
+glimpse(cmd)
+```
+
+## D3
+
+```{r D3}
+cmd <- cmd %>%
+  mutate(cout_total = quantite * cout_unitaire,
+         marge      = prix_total - cout_total,
+         taux_marge = marge / prix_total * 100,
+         delai      = as.numeric(date_livr - date_cmd),
+         annee      = format(date_cmd, "%Y"))
+cmd %>% select(prix_total, cout_total, marge, taux_marge, delai, annee)
+```
+
+## D4
+
+```{r D4}
+canaux <- cmd %>%
+  group_by(canal) %>%
+  summarise(n_lignes    = n(),
+            n_commandes = n_distinct(commande),
+            ca          = sum(prix_total),
+            marge       = sum(marge),
+            taux_marge  = marge / ca * 100,
+            delai_moyen = mean(delai))
+canaux
+```
+
+Le taux de marge global se calcule comme marge totale / CA, et non comme la moyenne des taux par ligne. Le **magasin** génère le plus de CA et de marge en valeur absolue (`r format(round(canaux$marge[1]), big.mark = " ")` €). Le **catalogue** a le meilleur taux de marge (`r round(canaux$taux_marge[2], 1)` %), mais les écarts entre canaux restent faibles (environ 1 point). Le canal le plus **rapide** est de loin le magasin (`r round(canaux$delai_moyen[1], 2)` jour en moyenne, car le client repart presque toujours avec l'article), contre plus de 3 jours pour le catalogue et internet.
+
+## D5
+
+```{r D5}
+parts <- cmd %>%
+  group_by(annee, canal) %>%
+  summarise(ca = sum(prix_total), .groups = "drop_last") %>%
+  mutate(part = ca / sum(ca) * 100) %>%
+  ungroup()
+parts
+
+part_internet <- parts %>% filter(canal == "internet")
+part_internet
+```
+
+La part d'internet dans le CA passe de `r round(part_internet$part[1], 1)` % en `r part_internet$annee[1]` à `r round(part_internet$part[5], 1)` % en `r part_internet$annee[5]`. La tendance est à la hausse, avec un creux marqué en 2006 (`r round(part_internet$part[4], 1)` %).
+
+## D6
+
+```{r D6}
+canal_prefere <- cmd %>%
+  group_by(client, canal) %>%
+  summarise(n_cmd_canal = n_distinct(commande), .groups = "drop_last") %>%
+  slice_max(n_cmd_canal, n = 1, with_ties = FALSE) %>%
+  select(client, canal_prefere = canal)
+
+top5 <- cmd %>%
+  group_by(client) %>%
+  summarise(ca = sum(prix_total), n_commandes = n_distinct(commande)) %>%
+  slice_max(ca, n = 5) %>%
+  left_join(canal_prefere, by = "client")
+top5
+```
+
+Le meilleur client (n° `r top5$client[1]`) a généré `r round(top5$ca[1])` € de CA en `r top5$n_commandes[1]` commandes. On compte le canal le plus utilisé en nombre de commandes distinctes. En cas d'égalité, on garde le premier canal.
+
+## D7
+
+```{r D7}
+par_commande <- cmd %>%
+  group_by(canal, commande) %>%
+  summarise(montant = sum(prix_total), n_articles = n(), .groups = "drop")
+
+panier <- par_commande %>%
+  group_by(canal) %>%
+  summarise(n_commandes        = n(),
+            panier_moyen       = mean(montant),
+            articles_par_cmd   = mean(n_articles))
+panier
+```
+
+On compte un article par ligne du fichier, puisque le fichier contient une ligne par article commandé. Le panier moyen le plus élevé est celui du canal **`r panier$canal[which.max(panier$panier_moyen)]`** (`r round(max(panier$panier_moyen), 2)` €).
+
+## D8
+
+```{r D8}
+# Délais négatifs
+cmd %>% filter(delai < 0)
+
+# Ventes à perte
+pertes <- cmd %>% filter(marge < 0)
+pertes %>% select(commande, canal, produit, quantite, prix_total, cout_total, marge)
+
+pertes %>%
+  group_by(canal) %>%
+  summarise(n_lignes = n(), perte_totale = sum(marge))
+```
+
+Il n'y a **aucune** ligne avec un délai de livraison négatif. `r nrow(pertes)` ligne a été vendue à perte, sur le canal `r paste(unique(pertes$canal), collapse = ", ")`, pour une perte de `r round(abs(sum(pertes$marge)), 2)` €. C'est négligeable.
+
+## D9
+
+Entre `r format(min(cmd$date_cmd), "%Y")` et `r format(max(cmd$date_cmd), "%Y")`, l'enseigne a réalisé un chiffre d'affaires de `r format(round(sum(cmd$prix_total)), big.mark = " ")` € pour une marge de `r format(round(sum(cmd$marge)), big.mark = " ")` €, soit un taux de marge global de `r round(sum(cmd$marge) / sum(cmd$prix_total) * 100, 1)` %. Le magasin reste le premier canal avec `r round(canaux$ca[1] / sum(canaux$ca) * 100, 1)` % du CA, et c'est de loin le plus rapide (`r round(canaux$delai_moyen[1], 2)` jour de délai moyen contre `r round(canaux$delai_moyen[3], 1)` jours sur internet), alors que les taux de marge des trois canaux sont très proches (de `r round(min(canaux$taux_marge), 1)` % à `r round(max(canaux$taux_marge), 1)` %). La part d'internet dans le CA progresse, de `r round(part_internet$part[1], 1)` % en `r part_internet$annee[1]` à `r round(part_internet$part[5], 1)` % en `r part_internet$annee[5]`, malgré un recul ponctuel en 2006. Le panier moyen atteint `r round(panier$panier_moyen[panier$canal == "catalogue"], 2)` € sur catalogue, contre `r round(panier$panier_moyen[panier$canal == "magasin"], 2)` € en magasin, et les cinq meilleurs clients représentent à eux seuls `r round(sum(top5$ca) / sum(cmd$prix_total) * 100, 1)` % du CA. Enfin, le contrôle qualité est rassurant : aucun délai de livraison négatif et une seule vente à perte, pour `r round(abs(sum(pertes$marge)), 2)` €.
